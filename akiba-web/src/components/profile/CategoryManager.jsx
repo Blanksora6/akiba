@@ -39,7 +39,12 @@ export default function CategoryManager() {
     }
   }
 
-  async function handleDelete(id) {
+  async function handleDelete(id, name) {
+    const confirmed = window.confirm(
+      `Delete "${name}"? You won't be able to add new transactions or goals to it afterward.`
+    );
+    if (!confirmed) return;
+
     try {
       await deleteClass(id);
       refresh();
@@ -71,7 +76,26 @@ export default function CategoryManager() {
               <div className="class-right">
                 <span className="class-amt mono">Limit {c.monthlyLimit.toLocaleString()}</span>
                 <button type="button" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => startEdit(c)}>Edit</button>
-                <button type="button" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => handleDelete(c.id)}>Delete</button>
+                <button
+                  type="button"
+                  aria-label={`Delete ${c.name}`}
+                  onClick={() => handleDelete(c.id, c.name)}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: '50%',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: 1,
+                    fontSize: 15,
+                    color: 'var(--rust)',
+                    borderColor: 'var(--rust)',
+                  }}
+                >
+                  −
+                </button>
               </div>
             </div>
           )}
