@@ -11,6 +11,12 @@ namespace Akiba.Models
         public string GoogleId { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
+
+        // Separate from DisplayName (which comes from Google and isn't
+        // user-editable here) — this is what shows in the app's greeting,
+        // editable from Profile. Falls back to DisplayName when unset.
+        public string? Nickname { get; set; }
+
         public string Currency { get; set; } = "KES";
         public DateTime CreatedAt { get; set; }
     }

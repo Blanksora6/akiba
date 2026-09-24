@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBalance, getSpendingSummary, getClasses, getTransactions } from '../api/client';
+import { getBalance, getSpendingSummary, getClasses, getTransactions, getProfile } from '../api/client';
 import BalanceCard from '../components/dashboard/BalanceCard';
 import QuickActions from '../components/dashboard/QuickActions';
 import SpendingPie from '../components/dashboard/SpendingPie';
@@ -9,6 +9,7 @@ export default function HomePage() {
   const [balance, setBalance] = useState(null);
   const [summary, setSummary] = useState(null);
   const [monthTxns, setMonthTxns] = useState(null);
+  const [greetingName, setGreetingName] = useState('');
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -23,9 +24,11 @@ export default function HomePage() {
       getSpendingSummary(year, month),
       getClasses(),
       getTransactions({ fromDate: monthStart, toDate: monthEnd }),
+      getProfile(),
     ])
-      .then(([balanceRes, spendingRes, classesRes, txnsRes]) => {
+      .then(([balanceRes, spendingRes, classesRes, txnsRes, profileRes]) => {
         setBalance(balanceRes.balance);
+        setGreetingName(profileRes.nickname || profileRes.displayName || '');
 
         // Merge each class's monthlyLimit into the spending summary here —
         // the summary endpoint only returns totals, not limits, so the
@@ -46,7 +49,7 @@ export default function HomePage() {
   return (
     <div>
       <p className="mono" style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 6px' }}>Today</p>
-      <h2 style={{ marginBottom: 20 }}>Hey Karma 👋</h2>
+      <h2 style={{ marginBottom: 20 }}>Hey {greetingName} 👋</h2>
 
       <div className="grid3">
         <div>

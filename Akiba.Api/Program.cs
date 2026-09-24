@@ -1,6 +1,9 @@
 using Akiba.Data;
 using Akiba.Endpoints;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 // Must be set before CreateBuilder runs — this is the one point the framework
 // reads fresh every time. Setting builder.Environment.EnvironmentName afterward
@@ -32,6 +35,25 @@ builder.Services.AddCors(options =>
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// JWT auth is registered here but not yet REQUIRED anywhere — existing
+// endpoints still take userId as a query param. This lets /api/auth/google
+// be tested in isolation before anything that currently works gets touched.
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"]!))
+        };
+    });
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -42,7 +64,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowWebClient");
+app.UseAuthentication();
+app.UseAuthorization();
 
+app.MapAuthEndpoints();
+app.MapProfileEndpoints();
 app.MapClassEndpoints();
 app.MapTransactionEndpoints();
 app.MapGoalEndpoints();
