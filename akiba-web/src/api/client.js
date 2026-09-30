@@ -1,4 +1,7 @@
-const API_BASE = 'https://localhost:7080';
+// The API is served from the same origin (Vercel function in production,
+// Vite middleware in dev), so paths are relative. VITE_API_BASE can point the
+// client at another deployment if ever needed.
+const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 const TOKEN_KEY = 'akiba_token';
 const USER_ID_KEY = 'akiba_user_id';
@@ -36,12 +39,6 @@ export function clearStoredAuth() {
   localStorage.removeItem(NAME_KEY);
 }
 
-function getUserId() {
-  const auth = getStoredAuth();
-  if (!auth) throw new Error('Not signed in.');
-  return auth.userId;
-}
-
 // Exchanges a real Google ID token for our own JWT. Does NOT go through
 // apiFetch below, since there's no auth token to attach yet at this point —
 // this call is what produces the first one.
@@ -62,6 +59,15 @@ async function apiFetch(path, options = {}) {
 
   const res = await fetch(`${API_BASE}${path}`, { headers, ...options });
 
+  // Token expired (30-day lifetime) or the server's signing key changed —
+  // either way the stored token is dead, so drop it and show the login screen
+  // instead of leaving every page stuck on "API error 401".
+  if (res.status === 401) {
+    clearStoredAuth();
+    window.location.reload();
+    throw new Error('Session expired — please sign in again.');
+  }
+
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`API error ${res.status} on ${path}: ${body}`);
@@ -74,11 +80,11 @@ async function apiFetch(path, options = {}) {
 // ---------- Classes & Subjects ----------
 
 export function getClasses() {
-  return apiFetch(`/api/classes?userId=${getUserId()}`);
+  return apiFetch(`/api/classes`);
 }
 
 export function createClass({ name, colorHex, monthlyLimit }) {
-  return apiFetch(`/api/classes?userId=${getUserId()}`, {
+  return apiFetch(`/api/classes`, {
     method: 'POST',
     body: JSON.stringify({ name, colorHex, monthlyLimit }),
   });
@@ -115,15 +121,16 @@ export function deleteSubject(id) {
 
 // ---------- Transactions ----------
 
-export function getTransactions({ fromDate, toDate } = {}) {
-  const params = new URLSearchParams({ userId: getUserId() });
+export function getTransactions({ fromDate, toDate, limit } = {}) {
+  const params = new URLSearchParams();
   if (fromDate) params.set('fromDate', fromDate);
   if (toDate) params.set('toDate', toDate);
+  if (limit) params.set('limit', limit);
   return apiFetch(`/api/transactions?${params.toString()}`);
 }
 
 export function createTransaction({ subjectId, amount, note, occurredAt }) {
-  return apiFetch(`/api/transactions?userId=${getUserId()}`, {
+  return apiFetch(`/api/transactions`, {
     method: 'POST',
     body: JSON.stringify({ subjectId, amount, note, occurredAt }),
   });
@@ -141,21 +148,21 @@ export function deleteTransaction(id) {
 }
 
 export function getSpendingSummary(year, month) {
-  return apiFetch(`/api/summary/spending?userId=${getUserId()}&year=${year}&month=${month}`);
+  return apiFetch(`/api/summary/spending?year=${year}&month=${month}`);
 }
 
 export function getBalance() {
-  return apiFetch(`/api/summary/balance?userId=${getUserId()}`);
+  return apiFetch(`/api/summary/balance`);
 }
 
 // ---------- Goals ----------
 
 export function getGoals({ includePurchased = false } = {}) {
-  return apiFetch(`/api/goals?userId=${getUserId()}&includePurchased=${includePurchased}`);
+  return apiFetch(`/api/goals?includePurchased=${includePurchased}`);
 }
 
 export function createGoal(payload) {
-  return apiFetch(`/api/goals?userId=${getUserId()}`, {
+  return apiFetch(`/api/goals`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -175,11 +182,11 @@ export function deleteGoal(id) {
 // ---------- Profile ----------
 
 export function getProfile() {
-  return apiFetch(`/api/profile?userId=${getUserId()}`);
+  return apiFetch(`/api/profile`);
 }
 
 export function updateNickname(nickname) {
-  return apiFetch(`/api/profile/nickname?userId=${getUserId()}`, {
+  return apiFetch(`/api/profile/nickname`, {
     method: 'PUT',
     body: JSON.stringify({ nickname }),
   });

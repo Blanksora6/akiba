@@ -4,15 +4,22 @@ import BalanceCard from '../components/dashboard/BalanceCard';
 import QuickActions from '../components/dashboard/QuickActions';
 import SpendingPie from '../components/dashboard/SpendingPie';
 import CategoryList from '../components/dashboard/CategoryList';
+import TransactionForm from '../components/transactions/TransactionForm';
+import TransactionList from '../components/transactions/TransactionList';
+
+const RECENT_COUNT = 6;
 
 export default function HomePage() {
   const [balance, setBalance] = useState(null);
   const [summary, setSummary] = useState(null);
   const [monthTxns, setMonthTxns] = useState(null);
+  const [recentTxns, setRecentTxns] = useState(null);
+  const [classes, setClasses] = useState([]);
+  const [addType, setAddType] = useState(null); // 'expense' | 'income' while the quick-add form is open
   const [greetingName, setGreetingName] = useState('');
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  function load() {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1; // JS months are 0-indexed, the API's aren't
@@ -25,8 +32,9 @@ export default function HomePage() {
       getClasses(),
       getTransactions({ fromDate: monthStart, toDate: monthEnd }),
       getProfile(),
+      getTransactions({ limit: RECENT_COUNT }),
     ])
-      .then(([balanceRes, spendingRes, classesRes, txnsRes, profileRes]) => {
+      .then(([balanceRes, spendingRes, classesRes, txnsRes, profileRes, recentRes]) => {
         setBalance(balanceRes.balance);
         setGreetingName(profileRes.nickname || profileRes.displayName || '');
 
@@ -39,9 +47,18 @@ export default function HomePage() {
         });
         setSummary(summaryWithLimits);
         setMonthTxns(txnsRes);
+        setRecentTxns(recentRes);
+        setClasses(classesRes);
       })
       .catch((err) => setError(err.message));
-  }, []);
+  }
+
+  useEffect(load, []);
+
+  function handleSaved() {
+    setAddType(null);
+    load();
+  }
 
   if (error) return <p style={{ color: 'var(--rust)' }}>Error: {error}</p>;
   if (summary === null) return <p>Loading…</p>;
@@ -54,7 +71,20 @@ export default function HomePage() {
       <div className="grid3">
         <div>
           <BalanceCard balance={balance} />
-          <QuickActions />
+          <QuickActions activeType={addType} onAdd={(t) => setAddType(addType === t ? null : t)} />
+          {addType && (
+            <div style={{ marginBottom: 22 }}>
+              <TransactionForm
+                classes={classes}
+                editingTxn={null}
+                initialType={addType}
+                cancellable
+                onSaved={handleSaved}
+                onCancel={() => setAddType(null)}
+                onCategoriesChanged={load}
+              />
+            </div>
+          )}
         </div>
         <div>
           <p className="section-title">Spending by category — this month</p>
@@ -62,7 +92,8 @@ export default function HomePage() {
           <CategoryList summary={summary} transactions={monthTxns} />
         </div>
         <div>
-          {/* Recent transactions list comes with the Transactions page build */}
+          <p className="section-title">Recent transactions</p>
+          <TransactionList transactions={recentTxns} />
         </div>
       </div>
     </div>

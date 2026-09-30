@@ -18,13 +18,15 @@ function todayISO() {
 
 // One form, two jobs: creating a new transaction, or editing an existing one
 // (editingTxn is null for "create", a transaction object for "edit").
-export default function TransactionForm({ classes, editingTxn, onSaved, onCancel, onCategoriesChanged }) {
+// initialType presets Expense/Income for a new entry (Home's quick actions);
+// cancellable shows Cancel even when creating, for when the form is a popover.
+export default function TransactionForm({ classes, editingTxn, initialType = 'expense', cancellable = false, onSaved, onCancel, onCategoriesChanged }) {
   const [classId, setClassId] = useState('');
   const [newClassName, setNewClassName] = useState('');
   const [newClassLimit, setNewClassLimit] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [newSubjectName, setNewSubjectName] = useState('');
-  const [type, setType] = useState('expense');
+  const [type, setType] = useState(initialType);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [occurredAt, setOccurredAt] = useState(todayISO());
@@ -42,7 +44,7 @@ export default function TransactionForm({ classes, editingTxn, onSaved, onCancel
     } else {
       setClassId('');
       setSubjectId('');
-      setType('expense');
+      setType(initialType);
       setAmount('');
       setNote('');
       setOccurredAt(todayISO());
@@ -51,7 +53,7 @@ export default function TransactionForm({ classes, editingTxn, onSaved, onCancel
     setNewClassLimit('');
     setNewSubjectName('');
     setError(null);
-  }, [editingTxn]);
+  }, [editingTxn, initialType]);
 
   const isNewClass = classId === NEW_CLASS;
   const selectedClass = classes.find((c) => c.id === classId);
@@ -157,7 +159,7 @@ export default function TransactionForm({ classes, editingTxn, onSaved, onCancel
         <button type="submit" disabled={saving}>
           {saving ? 'Saving…' : editingTxn ? 'Save changes' : 'Add transaction'}
         </button>
-        {editingTxn && <button type="button" onClick={onCancel}>Cancel</button>}
+        {(editingTxn || cancellable) && <button type="button" onClick={onCancel}>Cancel</button>}
       </div>
     </form>
   );

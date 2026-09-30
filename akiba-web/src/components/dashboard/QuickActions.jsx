@@ -1,12 +1,25 @@
-// Static for now — these aren't wired to anything yet. Real "add transaction"
-// functionality comes with the Transactions page build, specifically the
-// two-level class/subject picker flagged early on as the actual hard part.
-export default function QuickActions() {
+// Expense/Income open the regular TransactionForm on Home with the type
+// preselected. M-Pesa is a placeholder until statement import exists.
+export default function QuickActions({ activeType, onAdd }) {
   return (
     <div className="quick-actions">
-      <div className="qa-btn">+ Expense</div>
-      <div className="qa-btn">+ Income</div>
-      <div className="qa-btn">M-Pesa</div>
+      <button
+        type="button"
+        className={`qa-btn${activeType === 'expense' ? ' active-type' : ''}`}
+        onClick={() => onAdd('expense')}
+      >
+        + Expense
+      </button>
+      <button
+        type="button"
+        className={`qa-btn${activeType === 'income' ? ' active-type' : ''}`}
+        onClick={() => onAdd('income')}
+      >
+        + Income
+      </button>
+      <button type="button" className="qa-btn" disabled title="Coming soon" style={{ opacity: 0.5, cursor: 'default' }}>
+        M-Pesa
+      </button>
     </div>
   );
 }
