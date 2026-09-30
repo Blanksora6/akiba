@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Akiba.Data;
 using Akiba.Dtos;
 using Akiba.Models;
@@ -9,12 +10,14 @@ namespace Akiba.Endpoints
     {
         public static void MapTransactionEndpoints(this WebApplication app)
         {
-            var group = app.MapGroup("/api/transactions").WithTags("Transactions");
+            var group = app.MapGroup("/api/transactions").WithTags("Transactions").RequireAuthorization();
 
-            // GET /api/transactions?userId={id}&fromDate={date}&toDate={date}
-            // fromDate/toDate are optional — omit both to get everything (used by the "all transactions" view).
-            group.MapGet("/", async (Guid userId, DateTime? fromDate, DateTime? toDate, AkibaDbContext db) =>
+            // GET /api/transactions?fromDate={date}&toDate={date}
+            // fromDate/toDate are optional — omit both to get everything.
+            group.MapGet("/", async (ClaimsPrincipal user, DateTime? fromDate, DateTime? toDate, AkibaDbContext db) =>
             {
+                var userId = user.GetUserId();
+
                 var query =
                     from t in db.Transactions
                     join s in db.Subjects on t.SubjectId equals s.Id
@@ -34,11 +37,17 @@ namespace Akiba.Endpoints
                 return Results.Ok(result);
             });
 
-            // POST /api/transactions?userId={id}
-            group.MapPost("/", async (Guid userId, CreateTransactionRequest req, AkibaDbContext db) =>
+            // POST /api/transactions — the subject must belong to one of YOUR classes
+            group.MapPost("/", async (ClaimsPrincipal user, CreateTransactionRequest req, AkibaDbContext db) =>
             {
-                var subjectExists = await db.Subjects.AnyAsync(s => s.Id == req.SubjectId && !s.IsDeleted);
-                if (!subjectExists) return Results.BadRequest("Subject does not exist.");
+                var userId = user.GetUserId();
+
+                var subjectOwned = await (
+                    from s in db.Subjects
+                    join c in db.Classes on s.ClassId equals c.Id
+                    where s.Id == req.SubjectId && c.UserId == userId && !s.IsDeleted
+                    select s.Id).AnyAsync();
+                if (!subjectOwned) return Results.BadRequest("Subject does not exist.");
 
                 var entity = new Transaction
                 {
@@ -56,12 +65,20 @@ namespace Akiba.Endpoints
                 return Results.Created($"/api/transactions/{entity.Id}", entity.Id);
             });
 
-            // PUT /api/transactions/{id} — entries can be miscategorized and corrected later,
-            // so this is a real edit, not append-only.
-            group.MapPut("/{id:guid}", async (Guid id, UpdateTransactionRequest req, AkibaDbContext db) =>
+            // PUT /api/transactions/{id} — owner only, and the NEW subject must also be yours
+            group.MapPut("/{id:guid}", async (Guid id, ClaimsPrincipal user, UpdateTransactionRequest req, AkibaDbContext db) =>
             {
-                var entity = await db.Transactions.FindAsync(id);
+                var userId = user.GetUserId();
+
+                var entity = await db.Transactions.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
                 if (entity is null || entity.IsDeleted) return Results.NotFound();
+
+                var subjectOwned = await (
+                    from s in db.Subjects
+                    join c in db.Classes on s.ClassId equals c.Id
+                    where s.Id == req.SubjectId && c.UserId == userId && !s.IsDeleted
+                    select s.Id).AnyAsync();
+                if (!subjectOwned) return Results.BadRequest("Subject does not exist.");
 
                 entity.SubjectId = req.SubjectId;
                 entity.Amount = req.Amount;
@@ -72,11 +89,11 @@ namespace Akiba.Endpoints
                 return Results.NoContent();
             });
 
-            // DELETE /api/transactions/{id} — soft delete, so a delete made offline
-            // can't silently resurrect a row another device edited before it synced.
-            group.MapDelete("/{id:guid}", async (Guid id, AkibaDbContext db) =>
+            // DELETE /api/transactions/{id} — soft delete, owner only
+            group.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal user, AkibaDbContext db) =>
             {
-                var entity = await db.Transactions.FindAsync(id);
+                var userId = user.GetUserId();
+                var entity = await db.Transactions.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
                 if (entity is null) return Results.NotFound();
 
                 entity.IsDeleted = true;
@@ -85,11 +102,11 @@ namespace Akiba.Endpoints
                 return Results.NoContent();
             });
 
-            // GET /api/summary/spending?userId={id}&year=2026&month=8
-            // Class-level totals only, expenses only (negative amounts) — this is exactly
-            // what the pie chart on the dashboard renders, no client-side aggregation needed.
-            app.MapGet("/api/summary/spending", async (Guid userId, int year, int month, AkibaDbContext db) =>
+            // GET /api/summary/spending?year=2026&month=9
+            // Class-level totals only, expenses only — what the pie chart renders.
+            app.MapGet("/api/summary/spending", async (ClaimsPrincipal user, int year, int month, AkibaDbContext db) =>
             {
+                var userId = user.GetUserId();
                 var monthStart = new DateTime(year, month, 1);
                 var monthEnd = monthStart.AddMonths(1);
 
@@ -103,10 +120,8 @@ namespace Akiba.Endpoints
                     select new { c.Id, c.Name, c.ColorHex, t.Amount }
                 ).ToListAsync();
 
-                // Grouped in memory, not in SQL — the SQLite provider can't translate
-                // GroupBy projected straight into a record constructor. Fine at this
-                // scale: a personal app's monthly transaction count is never large
-                // enough for this to matter performance-wise.
+                // Grouped in memory — the SQLite provider can't translate GroupBy
+                // projected into a record constructor. Fine at personal-app scale.
                 var result = rawRows
                     .GroupBy(x => new { x.Id, x.Name, x.ColorHex })
                     .Select(g => new SpendingSummaryItem(g.Key.Id, g.Key.Name, g.Key.ColorHex, -g.Sum(x => x.Amount)))
@@ -114,20 +129,18 @@ namespace Akiba.Endpoints
                     .ToList();
 
                 return Results.Ok(result);
-            }).WithTags("Transactions");
+            }).WithTags("Transactions").RequireAuthorization();
 
-            // GET /api/summary/balance?userId={id}
-            // All-time sum across every transaction (income positive, expenses negative).
-            // Missing from the original contract — added when the dashboard build revealed
-            // there was no endpoint for the single number the Balance Card actually needs.
-            app.MapGet("/api/summary/balance", async (Guid userId, AkibaDbContext db) =>
+            // GET /api/summary/balance — all-time sum, income positive, expenses negative
+            app.MapGet("/api/summary/balance", async (ClaimsPrincipal user, AkibaDbContext db) =>
             {
+                var userId = user.GetUserId();
                 var balance = await db.Transactions
                     .Where(t => t.UserId == userId && !t.IsDeleted)
                     .SumAsync(t => t.Amount);
 
                 return Results.Ok(new { balance });
-            }).WithTags("Transactions");
+            }).WithTags("Transactions").RequireAuthorization();
         }
     }
 }

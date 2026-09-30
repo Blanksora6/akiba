@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Akiba.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,27 +11,27 @@ namespace Akiba.Endpoints
     {
         public static void MapProfileEndpoints(this WebApplication app)
         {
-            var group = app.MapGroup("/api/profile").WithTags("Profile");
+            var group = app.MapGroup("/api/profile").WithTags("Profile").RequireAuthorization();
 
-            // GET /api/profile?userId={id}
-            group.MapGet("/", async (Guid userId, AkibaDbContext db) =>
+            // GET /api/profile
+            group.MapGet("/", async (ClaimsPrincipal user, AkibaDbContext db) =>
             {
-                var user = await db.Users.FindAsync(userId);
-                if (user is null) return Results.NotFound();
+                var appUser = await db.Users.FindAsync(user.GetUserId());
+                if (appUser is null) return Results.NotFound();
 
-                return Results.Ok(new ProfileDto(user.DisplayName, user.Email, user.Nickname));
+                return Results.Ok(new ProfileDto(appUser.DisplayName, appUser.Email, appUser.Nickname));
             });
 
-            // PUT /api/profile/nickname?userId={id}
-            group.MapPut("/nickname", async (Guid userId, UpdateNicknameRequest req, AkibaDbContext db) =>
+            // PUT /api/profile/nickname
+            group.MapPut("/nickname", async (ClaimsPrincipal user, UpdateNicknameRequest req, AkibaDbContext db) =>
             {
-                var user = await db.Users.FindAsync(userId);
-                if (user is null) return Results.NotFound();
+                var appUser = await db.Users.FindAsync(user.GetUserId());
+                if (appUser is null) return Results.NotFound();
 
-                user.Nickname = string.IsNullOrWhiteSpace(req.Nickname) ? null : req.Nickname.Trim();
+                appUser.Nickname = string.IsNullOrWhiteSpace(req.Nickname) ? null : req.Nickname.Trim();
                 await db.SaveChangesAsync();
 
-                return Results.Ok(new ProfileDto(user.DisplayName, user.Email, user.Nickname));
+                return Results.Ok(new ProfileDto(appUser.DisplayName, appUser.Email, appUser.Nickname));
             });
         }
     }

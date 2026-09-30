@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Akiba.Data;
 using Akiba.Dtos;
 using Akiba.Models;
@@ -9,11 +10,13 @@ namespace Akiba.Endpoints
     {
         public static void MapGoalEndpoints(this WebApplication app)
         {
-            var group = app.MapGroup("/api/goals").WithTags("Goals");
+            var group = app.MapGroup("/api/goals").WithTags("Goals").RequireAuthorization();
 
-            // GET /api/goals?userId={id}&includePurchased=false
-            group.MapGet("/", async (Guid userId, bool? includePurchased, AkibaDbContext db) =>
+            // GET /api/goals?includePurchased=false
+            group.MapGet("/", async (ClaimsPrincipal user, bool? includePurchased, AkibaDbContext db) =>
             {
+                var userId = user.GetUserId();
+
                 var query =
                     from g in db.Goals
                     join c in db.Classes on g.ClassId equals c.Id
@@ -32,11 +35,13 @@ namespace Akiba.Endpoints
                 return Results.Ok(result);
             });
 
-            // POST /api/goals?userId={id}
-            group.MapPost("/", async (Guid userId, CreateGoalRequest req, AkibaDbContext db) =>
+            // POST /api/goals — the class must be yours
+            group.MapPost("/", async (ClaimsPrincipal user, CreateGoalRequest req, AkibaDbContext db) =>
             {
-                var classExists = await db.Classes.AnyAsync(c => c.Id == req.ClassId && !c.IsDeleted);
-                if (!classExists) return Results.BadRequest("Class does not exist.");
+                var userId = user.GetUserId();
+
+                var classOwned = await db.Classes.AnyAsync(c => c.Id == req.ClassId && c.UserId == userId && !c.IsDeleted);
+                if (!classOwned) return Results.BadRequest("Class does not exist.");
 
                 if (!req.IsRecurring && req.TargetDate is null)
                     return Results.BadRequest("Provide either a targetDate or mark it recurring with an interval.");
@@ -62,12 +67,11 @@ namespace Akiba.Endpoints
                 return Results.Created($"/api/goals/{entity.Id}", entity.Id);
             });
 
-            // PUT /api/goals/{id} — covers editing details AND marking as purchased
-            // (this is the "edit made from whichever device" case that still needs
-            // last-write-wins, unlike append-only transactions).
-            group.MapPut("/{id:guid}", async (Guid id, UpdateGoalRequest req, AkibaDbContext db) =>
+            // PUT /api/goals/{id} — owner only; covers editing AND marking as purchased
+            group.MapPut("/{id:guid}", async (Guid id, ClaimsPrincipal user, UpdateGoalRequest req, AkibaDbContext db) =>
             {
-                var entity = await db.Goals.FindAsync(id);
+                var userId = user.GetUserId();
+                var entity = await db.Goals.FirstOrDefaultAsync(g => g.Id == id && g.UserId == userId);
                 if (entity is null || entity.IsDeleted) return Results.NotFound();
 
                 entity.Name = req.Name;
@@ -81,10 +85,11 @@ namespace Akiba.Endpoints
                 return Results.NoContent();
             });
 
-            // DELETE /api/goals/{id}
-            group.MapDelete("/{id:guid}", async (Guid id, AkibaDbContext db) =>
+            // DELETE /api/goals/{id} — soft delete, owner only
+            group.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal user, AkibaDbContext db) =>
             {
-                var entity = await db.Goals.FindAsync(id);
+                var userId = user.GetUserId();
+                var entity = await db.Goals.FirstOrDefaultAsync(g => g.Id == id && g.UserId == userId);
                 if (entity is null) return Results.NotFound();
 
                 entity.IsDeleted = true;
