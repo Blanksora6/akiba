@@ -25,7 +25,7 @@ export default [
                 g.target_date AS "targetDate", g.is_recurring AS "isRecurring",
                 g.interval_months AS "intervalMonths", g.is_purchased AS "isPurchased"
          FROM goals g JOIN classes c ON c.id = g.class_id
-         WHERE g.user_id = $1 AND NOT g.is_deleted AND ($2 OR NOT g.is_purchased)`,
+         WHERE g.user_id = $1 AND NOT g.is_deleted AND NOT c.is_deleted AND ($2 OR NOT g.is_purchased)`,
         [userId, includePurchased],
       );
       return ok(rows);

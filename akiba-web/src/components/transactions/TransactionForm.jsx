@@ -12,8 +12,12 @@ function nextColor(existingCount) {
   return PALETTE[existingCount % PALETTE.length];
 }
 
+// The user's local calendar date — toISOString() would give the UTC date,
+// which in Nairobi (UTC+3) is still yesterday until 3 AM.
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 // One form, two jobs: creating a new transaction, or editing an existing one

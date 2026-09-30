@@ -15,7 +15,7 @@ function readTransactionFields(body) {
 async function ownsSubject(db, userId, subjectId) {
   const rows = await db.query(
     `SELECT 1 FROM subjects s JOIN classes c ON c.id = s.class_id
-     WHERE s.id = $1 AND c.user_id = $2 AND NOT s.is_deleted`,
+     WHERE s.id = $1 AND c.user_id = $2 AND NOT s.is_deleted AND NOT c.is_deleted`,
     [subjectId, userId],
   );
   return rows.length > 0;
@@ -37,7 +37,7 @@ export default [
          FROM transactions t
          JOIN subjects s ON s.id = t.subject_id
          JOIN classes c ON c.id = s.class_id
-         WHERE t.user_id = $1 AND NOT t.is_deleted
+         WHERE t.user_id = $1 AND NOT t.is_deleted AND NOT s.is_deleted AND NOT c.is_deleted
            AND ($2::timestamptz IS NULL OR t.occurred_at >= $2)
            AND ($3::timestamptz IS NULL OR t.occurred_at < $3)
          ORDER BY t.occurred_at DESC
@@ -71,7 +71,10 @@ export default [
     method: 'PUT', path: '/transactions/:id',
     async handler({ db, userId, params, body }) {
       const [existing] = await db.query(
-        `SELECT 1 FROM transactions WHERE id = $1 AND user_id = $2 AND NOT is_deleted`,
+        `SELECT 1 FROM transactions t
+         JOIN subjects s ON s.id = t.subject_id
+         JOIN classes c ON c.id = s.class_id
+         WHERE t.id = $1 AND t.user_id = $2 AND NOT t.is_deleted AND NOT s.is_deleted AND NOT c.is_deleted`,
         [params.id, userId],
       );
       if (!existing) return notFound();
@@ -119,7 +122,8 @@ export default [
          FROM transactions t
          JOIN subjects s ON s.id = t.subject_id
          JOIN classes c ON c.id = s.class_id
-         WHERE t.user_id = $1 AND NOT t.is_deleted AND t.amount < 0
+         WHERE t.user_id = $1 AND NOT t.is_deleted AND NOT s.is_deleted AND NOT c.is_deleted
+           AND t.amount < 0
            AND t.occurred_at >= $2 AND t.occurred_at < $3
          GROUP BY c.id, c.name, c.color_hex
          ORDER BY total DESC`,
@@ -134,8 +138,11 @@ export default [
     method: 'GET', path: '/summary/balance',
     async handler({ db, userId }) {
       const [row] = await db.query(
-        `SELECT COALESCE(SUM(amount), 0)::float8 AS balance
-         FROM transactions WHERE user_id = $1 AND NOT is_deleted`,
+        `SELECT COALESCE(SUM(t.amount), 0)::float8 AS balance
+         FROM transactions t
+         JOIN subjects s ON s.id = t.subject_id
+         JOIN classes c ON c.id = s.class_id
+         WHERE t.user_id = $1 AND NOT t.is_deleted AND NOT s.is_deleted AND NOT c.is_deleted`,
         [userId],
       );
       return ok(row);

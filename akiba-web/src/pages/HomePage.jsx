@@ -23,8 +23,12 @@ export default function HomePage() {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1; // JS months are 0-indexed, the API's aren't
-    const monthStart = new Date(year, month - 1, 1).toISOString();
-    const monthEnd = new Date(year, month, 1).toISOString();
+    // UTC bounds, not local: transaction dates are stored as UTC midnight of
+    // the picked calendar day, and the spending summary buckets months in
+    // UTC too — local bounds made the pie and the category drill-down
+    // disagree about transactions on the 1st of the month.
+    const monthStart = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+    const monthEnd = new Date(Date.UTC(year, month, 1)).toISOString();
 
     Promise.all([
       getBalance(),

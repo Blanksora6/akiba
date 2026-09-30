@@ -41,7 +41,7 @@ export default function CategoryManager() {
 
   async function handleDelete(id, name) {
     const confirmed = window.confirm(
-      `Delete "${name}"? You won't be able to add new transactions or goals to it afterward.`
+      `Delete "${name}"? All of its transactions and goals will be deleted too, and removed from your balance and spending.`
     );
     if (!confirmed) return;
 

@@ -63,16 +63,27 @@ export default [
     },
   },
 
-  // DELETE /api/classes/:id — soft delete, owner only
+  // DELETE /api/classes/:id — soft delete, owner only. Takes everything in the
+  // category with it (subjects, transactions, goals), each stamped with a new
+  // updated_at so sync pull hands the deletions to the phone too.
   {
     method: 'DELETE', path: '/classes/:id',
     async handler({ db, userId, params }) {
-      const rows = await db.query(
-        `UPDATE classes SET is_deleted = true, updated_at = now()
-         WHERE id = $1 AND user_id = $2 RETURNING id`,
-        [params.id, userId],
-      );
-      return rows.length ? noContent() : notFound();
+      const [owned] = await db.query(`SELECT 1 FROM classes WHERE id = $1 AND user_id = $2`, [params.id, userId]);
+      if (!owned) return notFound();
+
+      const p = [params.id];
+      await db.batch([
+        { text: `UPDATE classes SET is_deleted = true, updated_at = now() WHERE id = $1`, params: p },
+        { text: `UPDATE goals SET is_deleted = true, updated_at = now() WHERE class_id = $1 AND NOT is_deleted`, params: p },
+        {
+          text: `UPDATE transactions SET is_deleted = true, updated_at = now()
+                 WHERE NOT is_deleted AND subject_id IN (SELECT id FROM subjects WHERE class_id = $1)`,
+          params: p,
+        },
+        { text: `UPDATE subjects SET is_deleted = true, updated_at = now() WHERE class_id = $1 AND NOT is_deleted`, params: p },
+      ]);
+      return noContent();
     },
   },
 
@@ -110,17 +121,24 @@ export default [
       return rows.length ? noContent() : notFound();
     },
   },
+  // Same rule as classes: deleting a subject removes its transactions too.
   {
     method: 'DELETE', path: '/subjects/:id',
     async handler({ db, userId, params }) {
-      const rows = await db.query(
-        `UPDATE subjects s SET is_deleted = true, updated_at = now()
-         FROM classes c
-         WHERE s.id = $1 AND c.id = s.class_id AND c.user_id = $2
-         RETURNING s.id`,
+      const [owned] = await db.query(
+        `SELECT 1 FROM subjects s JOIN classes c ON c.id = s.class_id WHERE s.id = $1 AND c.user_id = $2`,
         [params.id, userId],
       );
-      return rows.length ? noContent() : notFound();
+      if (!owned) return notFound();
+
+      await db.batch([
+        { text: `UPDATE subjects SET is_deleted = true, updated_at = now() WHERE id = $1`, params: [params.id] },
+        {
+          text: `UPDATE transactions SET is_deleted = true, updated_at = now() WHERE subject_id = $1 AND NOT is_deleted`,
+          params: [params.id],
+        },
+      ]);
+      return noContent();
     },
   },
 ];

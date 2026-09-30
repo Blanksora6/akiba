@@ -200,3 +200,53 @@ test('sync: push new rows, last-write-wins, ownership enforced, pull includes de
 
   assert.equal((await call('GET', '/api/sync/pull', { token: t })).status, 400);
 });
+
+test('deleting a category removes its transactions and goals everywhere, and sync sees it', async () => {
+  const dan = await makeUser('Dan');
+  const t = dan.token;
+  const keepClass = (await call('POST', '/api/classes', { token: t, body: { name: 'Keep', colorHex: '#111111', monthlyLimit: 0 } })).body;
+  const keepSubject = (await call('POST', `/api/classes/${keepClass}/subjects`, { token: t, body: { name: 'k' } })).body;
+  const dropClass = (await call('POST', '/api/classes', { token: t, body: { name: 'Drop', colorHex: '#222222', monthlyLimit: 0 } })).body;
+  const dropSubject = (await call('POST', `/api/classes/${dropClass}/subjects`, { token: t, body: { name: 'd' } })).body;
+
+  const when = '2026-09-15T00:00:00Z';
+  await call('POST', '/api/transactions', { token: t, body: { subjectId: keepSubject, amount: -100, occurredAt: when } });
+  await call('POST', '/api/transactions', { token: t, body: { subjectId: dropSubject, amount: -500, occurredAt: when } });
+  await call('POST', '/api/goals', { token: t, body: { classId: dropClass, name: 'g', price: 1, targetDate: when, isRecurring: false } });
+  const before = new Date().toISOString();
+
+  assert.equal((await call('DELETE', `/api/classes/${dropClass}`, { token: t })).status, 204);
+
+  assert.deepEqual((await call('GET', '/api/summary/balance', { token: t })).body, { balance: -100 });
+  const spending = (await call('GET', '/api/summary/spending?year=2026&month=9', { token: t })).body;
+  assert.deepEqual(spending.map((s) => s.className), ['Keep']);
+  assert.equal((await call('GET', '/api/transactions', { token: t })).body.length, 1);
+  assert.equal((await call('GET', '/api/goals?includePurchased=true', { token: t })).body.length, 0);
+  assert.equal((await call('POST', '/api/transactions', { token: t, body: { subjectId: dropSubject, amount: -1, occurredAt: when } })).status, 400);
+
+  // Every cascaded row got a fresh updatedAt, so the phone's next pull deletes them.
+  const pulled = (await call('GET', `/api/sync/pull?since=${before}`, { token: t })).body;
+  assert.equal(pulled.classes.length, 1);
+  assert.ok(pulled.subjects.every((r) => r.isDeleted) && pulled.subjects.length === 1);
+  assert.ok(pulled.transactions.every((r) => r.isDeleted) && pulled.transactions.length === 1);
+  assert.ok(pulled.goals.every((r) => r.isDeleted) && pulled.goals.length === 1);
+
+  // Deleting a subject takes its transactions with it; other users get 404.
+  assert.equal((await call('DELETE', `/api/subjects/${keepSubject}`, { token: bob.token })).status, 404);
+  assert.equal((await call('DELETE', `/api/subjects/${keepSubject}`, { token: t })).status, 204);
+  assert.deepEqual((await call('GET', '/api/summary/balance', { token: t })).body, { balance: 0 });
+});
+
+test('a category deleted before the cascade existed is still hidden (read-side filter)', async () => {
+  const eve = await makeUser('Eve');
+  const t = eve.token;
+  const classId = (await call('POST', '/api/classes', { token: t, body: { name: 'Old', colorHex: '#333333', monthlyLimit: 0 } })).body;
+  const subjectId = (await call('POST', `/api/classes/${classId}/subjects`, { token: t, body: { name: 'o' } })).body;
+  await call('POST', '/api/transactions', { token: t, body: { subjectId, amount: -40, occurredAt: '2026-09-15T00:00:00Z' } });
+  // Simulate the old behavior: only the class row flagged.
+  await (await getDb()).query(`UPDATE classes SET is_deleted = true WHERE id = $1`, [classId]);
+
+  assert.deepEqual((await call('GET', '/api/summary/balance', { token: t })).body, { balance: 0 });
+  assert.deepEqual((await call('GET', '/api/summary/spending?year=2026&month=9', { token: t })).body, []);
+  assert.equal((await call('GET', '/api/transactions', { token: t })).body.length, 0);
+});
