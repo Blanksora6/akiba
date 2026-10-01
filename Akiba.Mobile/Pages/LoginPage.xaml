@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Akiba.Mobile.Pages.LoginPage"
+             BackgroundColor="{StaticResource Ink}"
+             Shell.NavBarIsVisible="False">
+    <VerticalStackLayout VerticalOptions="Center" Padding="32" Spacing="20">
+        <Label Text="Akiba" FontSize="40" FontAttributes="Bold"
+               TextColor="{StaticResource Cream}" HorizontalOptions="Center" />
+        <Label Text="Sign in to see your finances on this phone."
+               TextColor="{StaticResource Muted}" HorizontalTextAlignment="Center" />
+        <Button x:Name="SignInButton" Text="Sign in with Google" Clicked="OnSignIn"
+                BackgroundColor="{StaticResource Gold}" TextColor="{StaticResource Ink}"
+                CornerRadius="24" HeightRequest="48" FontAttributes="Bold" />
+        <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Gold}" />
+        <Label x:Name="ErrorLabel" TextColor="{StaticResource Rust}" HorizontalTextAlignment="Center" IsVisible="False" />
+    </VerticalStackLayout>
+</ContentPage>

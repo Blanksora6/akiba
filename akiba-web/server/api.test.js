@@ -14,19 +14,22 @@ const { issueToken } = await import('./auth.js');
 const { getDb } = await import('./db.js');
 
 // Drives handle() with a minimal fake req/res, the way Vite's dev server does.
-async function call(method, path, { token, body, rawBody } = {}) {
+// Non-JSON responses (the mobile sign-in page) come back as text.
+async function call(method, path, { token, body, rawBody, headers = {} } = {}) {
   const payload = rawBody ?? (body === undefined ? '' : JSON.stringify(body));
   const req = Readable.from(payload ? [Buffer.from(payload)] : []);
   req.method = method;
   req.url = path;
-  req.headers = token ? { authorization: `Bearer ${token}` } : {};
+  req.headers = { ...headers, ...(token ? { authorization: `Bearer ${token}` } : {}) };
 
   return new Promise((resolve) => {
     const res = {
       statusCode: 200,
-      setHeader() {},
+      headers: {},
+      setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
       end(data) {
-        resolve({ status: this.statusCode, body: data ? JSON.parse(data) : undefined });
+        const isJson = (this.headers['content-type'] || '').startsWith('application/json');
+        resolve({ status: this.statusCode, body: data ? (isJson ? JSON.parse(data) : data) : undefined });
       },
     };
     handle(req, res);
@@ -249,4 +252,23 @@ test('a category deleted before the cascade existed is still hidden (read-side f
   assert.deepEqual((await call('GET', '/api/summary/balance', { token: t })).body, { balance: 0 });
   assert.deepEqual((await call('GET', '/api/summary/spending?year=2026&month=9', { token: t })).body, []);
   assert.equal((await call('GET', '/api/transactions', { token: t })).body.length, 0);
+});
+
+test('mobile sign-in rejects missing CSRF and bad tokens, handing the error back to the app', async () => {
+  const form = { 'content-type': 'application/x-www-form-urlencoded' };
+
+  const noCookie = await call('POST', '/api/auth/google/mobile', { headers: form, rawBody: 'credential=x&g_csrf_token=abc' });
+  assert.equal(noCookie.status, 200);
+  assert.match(noCookie.body, /akiba:\/\/auth#error=invalid_request/);
+
+  const mismatch = await call('POST', '/api/auth/google/mobile', {
+    headers: { ...form, cookie: 'g_csrf_token=other' }, rawBody: 'credential=x&g_csrf_token=abc',
+  });
+  assert.match(mismatch.body, /error=invalid_request/);
+
+  const badToken = await call('POST', '/api/auth/google/mobile', {
+    headers: { ...form, cookie: 'foo=1; g_csrf_token=abc' }, rawBody: 'credential=not-a-jwt&g_csrf_token=abc',
+  });
+  assert.match(badToken.body, /error=invalid_token/);
+  assert.doesNotMatch(badToken.body, /token=ey/);
 });

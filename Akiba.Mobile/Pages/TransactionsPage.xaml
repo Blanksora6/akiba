@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Akiba.Mobile.ViewModels"
+             x:Class="Akiba.Mobile.Pages.TransactionsPage"
+             x:DataType="vm:TransactionsViewModel"
+             Title="Transactions"
+             BackgroundColor="{StaticResource Ink}">
+    <RefreshView IsRefreshing="{Binding IsRefreshing}" Command="{Binding RefreshCommand}"
+                 RefreshColor="{StaticResource Gold}">
+        <CollectionView ItemsSource="{Binding Items}" Margin="16,8">
+            <CollectionView.EmptyView>
+                <Label Text="No transactions yet. Pull down to sync." TextColor="{StaticResource Muted}"
+                       HorizontalOptions="Center" Margin="0,40" />
+            </CollectionView.EmptyView>
+            <CollectionView.Header>
+                <Label Text="{Binding Status}" FontSize="11" TextColor="{StaticResource Muted}"
+                       HorizontalOptions="Center" Margin="0,0,0,4" />
+            </CollectionView.Header>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:TransactionRowView">
+                    <Border Style="{StaticResource Card}" Margin="0,4">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                            <BoxView Color="{Binding DotColor}" WidthRequest="10" HeightRequest="10"
+                                     CornerRadius="5" VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                <Label Text="{Binding Title}" TextColor="{StaticResource Cream}" />
+                                <Label Text="{Binding Subtitle}" FontSize="12" TextColor="{StaticResource Muted}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="2" Spacing="2" HorizontalOptions="End">
+                                <Label Text="{Binding AmountText}" TextColor="{Binding AmountColor}"
+                                       FontAttributes="Bold" HorizontalTextAlignment="End" />
+                                <Label Text="{Binding DateText}" FontSize="11" TextColor="{StaticResource Muted}"
+                                       HorizontalTextAlignment="End" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </RefreshView>
+</ContentPage>

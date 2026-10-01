@@ -1,6 +1,6 @@
 import { getDb } from './db.js';
 import { userIdFromRequest } from './auth.js';
-import { ok, badRequest, unauthorized, notFound, isUuid, readJson } from './http.js';
+import { ok, badRequest, unauthorized, notFound, isUuid, readBody } from './http.js';
 import authRoutes from './routes/auth.js';
 import profileRoutes from './routes/profile.js';
 import classRoutes from './routes/classes.js';
@@ -38,8 +38,12 @@ function match(route, segments) {
   return params;
 }
 
-function send(res, { status, body }) {
+// A result is { status, body } (sent as JSON) or { status, headers, raw }
+// for the rare non-JSON response, like the mobile sign-in page.
+function send(res, { status, body, headers, raw }) {
   res.statusCode = status;
+  for (const [k, v] of Object.entries(headers ?? {})) res.setHeader(k, v);
+  if (raw !== undefined) return res.end(raw);
   if (body === undefined) return res.end();
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
@@ -68,7 +72,7 @@ export async function handle(req, res) {
     let body = null;
     if (req.method === 'POST' || req.method === 'PUT') {
       try {
-        body = await readJson(req);
+        body = await readBody(req);
       } catch {
         return send(res, badRequest('Request body is not valid JSON.'));
       }
@@ -76,7 +80,7 @@ export async function handle(req, res) {
     }
 
     const db = await getDb();
-    const result = await found.r.handler({ db, userId, params: found.params, query: url.searchParams, body });
+    const result = await found.r.handler({ db, userId, params: found.params, query: url.searchParams, body, req });
     send(res, result);
   } catch (err) {
     console.error(err);

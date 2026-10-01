@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Akiba.Mobile.ViewModels"
+             x:Class="Akiba.Mobile.Pages.HomePage"
+             x:DataType="vm:HomeViewModel"
+             Title="Home"
+             BackgroundColor="{StaticResource Ink}">
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Sign out" Clicked="OnSignOut" />
+    </ContentPage.ToolbarItems>
+
+    <RefreshView IsRefreshing="{Binding IsRefreshing}" Command="{Binding RefreshCommand}"
+                 RefreshColor="{StaticResource Gold}">
+        <ScrollView>
+            <VerticalStackLayout Padding="20" Spacing="16">
+                <Label Text="{Binding Greeting}" FontSize="26" FontAttributes="Bold" TextColor="{StaticResource Cream}" />
+
+                <Border BackgroundColor="{StaticResource SurfaceRaised}" StrokeThickness="0"
+                        StrokeShape="RoundRectangle 14" Padding="20,16">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Available balance" FontSize="12" TextColor="{StaticResource Muted}" />
+                        <Label Text="{Binding Balance}" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource Cream}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="{Binding MonthLabel}" Style="{StaticResource SectionTitle}" />
+                <Label Text="No spending recorded this month." TextColor="{StaticResource Muted}"
+                       IsVisible="{Binding HasNoSpending}" />
+
+                <VerticalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding Spending}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SpendingRow">
+                            <Border Style="{StaticResource Card}">
+                                <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+                                    <BoxView Color="{Binding Color}" WidthRequest="10" HeightRequest="10"
+                                             CornerRadius="5" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding Name}" TextColor="{StaticResource Cream}" VerticalOptions="Center" />
+                                    <VerticalStackLayout Grid.Column="2" HorizontalOptions="End">
+                                        <Label Text="{Binding AmountText}" TextColor="{StaticResource Cream}" HorizontalTextAlignment="End" />
+                                        <Label Text="{Binding LimitText}" FontSize="11" TextColor="{StaticResource Muted}"
+                                               HorizontalTextAlignment="End" IsVisible="{Binding HasLimit}" />
+                                    </VerticalStackLayout>
+                                    <ProgressBar Grid.Row="1" Grid.ColumnSpan="3" Progress="{Binding Progress}"
+                                                 ProgressColor="{Binding BarColor}" IsVisible="{Binding HasLimit}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <Label Text="{Binding Status}" FontSize="11" TextColor="{StaticResource Muted}"
+                       HorizontalOptions="Center" Margin="0,8,0,0" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </RefreshView>
+</ContentPage>

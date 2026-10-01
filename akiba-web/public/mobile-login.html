@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  Opened by the phone app in a browser tab. Google's button runs in redirect
+  mode: after sign-in, Google form-POSTs the ID token to
+  /api/auth/google/mobile, which sends the result back to the app.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in to Akiba</title>
+<style>
+  body { background: #0E1512; color: #EDE8DC; font-family: system-ui, sans-serif; margin: 0;
+         display: flex; flex-direction: column; align-items: center; justify-content: center;
+         height: 100vh; gap: 20px; text-align: center; padding: 0 24px; box-sizing: border-box; }
+  h1 { font-family: Georgia, serif; font-weight: 600; margin: 0; }
+  p { color: #8B958E; font-size: 14px; margin: 0; }
+</style>
+<body>
+  <h1>Akiba</h1>
+  <p>Sign in to sync your finances to this phone.</p>
+  <div id="g_id_onload"
+       data-client_id="781209907525-b2rq9lioerpkia275bg1kn6ingm6b62c.apps.googleusercontent.com"
+       data-ux_mode="redirect"
+       data-auto_prompt="false"></div>
+  <div class="g_id_signin" data-type="standard" data-theme="filled_black" data-size="large" data-shape="pill"></div>
+  <script>
+    // Absolute and on this same origin, so preview/production deploys each post back to themselves.
+    document.getElementById('g_id_onload').dataset.login_uri = location.origin + '/api/auth/google/mobile';
+  </script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
+</body>

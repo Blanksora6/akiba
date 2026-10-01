@@ -22,14 +22,20 @@ export function toNumber(v) {
   return Number.isFinite(n) ? n : undefined;
 }
 
-// Vercel pre-parses JSON bodies onto req.body; Vite's dev server doesn't,
-// so fall back to reading the raw stream.
-export async function readJson(req) {
+// JSON, or a form post (Google's redirect-mode sign-in) as a plain object.
+// Vercel pre-parses both onto req.body; Vite's dev server doesn't, so fall
+// back to reading the raw stream. Throws on malformed JSON.
+export async function readBody(req) {
+  const isForm = (req.headers['content-type'] || '').includes('application/x-www-form-urlencoded');
+  let text;
   if (req.body !== undefined) {
-    return typeof req.body === 'string' ? (req.body ? JSON.parse(req.body) : null) : req.body;
+    if (typeof req.body !== 'string') return req.body;
+    text = req.body;
+  } else {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    text = Buffer.concat(chunks).toString('utf8');
   }
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const text = Buffer.concat(chunks).toString('utf8');
-  return text ? JSON.parse(text) : null;
+  if (!text) return null;
+  return isForm ? Object.fromEntries(new URLSearchParams(text)) : JSON.parse(text);
 }
