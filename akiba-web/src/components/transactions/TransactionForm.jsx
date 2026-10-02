@@ -23,8 +23,10 @@ function todayISO() {
 // One form, two jobs: creating a new transaction, or editing an existing one
 // (editingTxn is null for "create", a transaction object for "edit").
 // initialType presets Expense/Income for a new entry (Home's quick actions);
-// cancellable shows Cancel even when creating, for when the form is a popover.
-export default function TransactionForm({ classes, editingTxn, initialType = 'expense', cancellable = false, onSaved, onCancel, onCategoriesChanged }) {
+// prefill ({ type, amount, note, date }) fills a new entry from a pasted
+// M-Pesa SMS; cancellable shows Cancel even when creating, for when the form
+// is a popover.
+export default function TransactionForm({ classes, editingTxn, initialType = 'expense', prefill = null, cancellable = false, onSaved, onCancel, onCategoriesChanged }) {
   const [classId, setClassId] = useState('');
   const [newClassName, setNewClassName] = useState('');
   const [newClassLimit, setNewClassLimit] = useState('');
@@ -48,16 +50,16 @@ export default function TransactionForm({ classes, editingTxn, initialType = 'ex
     } else {
       setClassId('');
       setSubjectId('');
-      setType(initialType);
-      setAmount('');
-      setNote('');
-      setOccurredAt(todayISO());
+      setType(prefill?.type ?? initialType);
+      setAmount(prefill?.amount ? String(prefill.amount) : '');
+      setNote(prefill?.note ?? '');
+      setOccurredAt(prefill?.date ?? todayISO());
     }
     setNewClassName('');
     setNewClassLimit('');
     setNewSubjectName('');
     setError(null);
-  }, [editingTxn, initialType]);
+  }, [editingTxn, initialType, prefill]);
 
   const isNewClass = classId === NEW_CLASS;
   const selectedClass = classes.find((c) => c.id === classId);

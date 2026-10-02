@@ -1,5 +1,5 @@
 // Expense/Income open the regular TransactionForm on Home with the type
-// preselected. M-Pesa is a placeholder until statement import exists.
+// preselected; M-Pesa opens a box to paste a confirmation SMS.
 export default function QuickActions({ activeType, onAdd }) {
   return (
     <div className="quick-actions">
@@ -17,7 +17,11 @@ export default function QuickActions({ activeType, onAdd }) {
       >
         + Income
       </button>
-      <button type="button" className="qa-btn" disabled title="Coming soon" style={{ opacity: 0.5, cursor: 'default' }}>
+      <button
+        type="button"
+        className={`qa-btn${activeType === 'mpesa' ? ' active-type' : ''}`}
+        onClick={() => onAdd('mpesa')}
+      >
         M-Pesa
       </button>
     </div>

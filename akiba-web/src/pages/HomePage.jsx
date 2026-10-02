@@ -6,6 +6,7 @@ import SpendingPie from '../components/dashboard/SpendingPie';
 import CategoryList from '../components/dashboard/CategoryList';
 import TransactionForm from '../components/transactions/TransactionForm';
 import TransactionList from '../components/transactions/TransactionList';
+import MpesaPaste from '../components/dashboard/MpesaPaste';
 
 const RECENT_COUNT = 6;
 
@@ -15,7 +16,8 @@ export default function HomePage() {
   const [monthTxns, setMonthTxns] = useState(null);
   const [recentTxns, setRecentTxns] = useState(null);
   const [classes, setClasses] = useState([]);
-  const [addType, setAddType] = useState(null); // 'expense' | 'income' while the quick-add form is open
+  const [addType, setAddType] = useState(null); // 'expense' | 'income' | 'mpesa' while a quick-add is open
+  const [mpesaPrefill, setMpesaPrefill] = useState(null); // parsed SMS, once read
   const [greetingName, setGreetingName] = useState('');
   const [error, setError] = useState(null);
 
@@ -59,8 +61,13 @@ export default function HomePage() {
 
   useEffect(load, []);
 
-  function handleSaved() {
+  function closeQuickAdd() {
     setAddType(null);
+    setMpesaPrefill(null);
+  }
+
+  function handleSaved() {
+    closeQuickAdd();
     load();
   }
 
@@ -75,16 +82,25 @@ export default function HomePage() {
       <div className="grid3">
         <div>
           <BalanceCard balance={balance} />
-          <QuickActions activeType={addType} onAdd={(t) => setAddType(addType === t ? null : t)} />
-          {addType && (
+          <QuickActions
+            activeType={addType}
+            onAdd={(t) => { setMpesaPrefill(null); setAddType(addType === t ? null : t); }}
+          />
+          {addType === 'mpesa' && !mpesaPrefill && (
+            <div style={{ marginBottom: 22 }}>
+              <MpesaPaste onParsed={setMpesaPrefill} onCancel={closeQuickAdd} />
+            </div>
+          )}
+          {(addType === 'expense' || addType === 'income' || mpesaPrefill) && (
             <div style={{ marginBottom: 22 }}>
               <TransactionForm
                 classes={classes}
                 editingTxn={null}
-                initialType={addType}
+                initialType={mpesaPrefill?.type ?? addType}
+                prefill={mpesaPrefill}
                 cancellable
                 onSaved={handleSaved}
-                onCancel={() => setAddType(null)}
+                onCancel={closeQuickAdd}
                 onCategoriesChanged={load}
               />
             </div>
