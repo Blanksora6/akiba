@@ -172,10 +172,13 @@ test('sync: push new rows, last-write-wins, ownership enforced, pull includes de
   assert.equal(res.status, 200);
   assert.equal((await call('GET', '/api/transactions', { token: t })).body[0].amount, -210);
 
-  // An older edit loses; a newer one (a soft delete) wins.
-  await call('POST', '/api/sync/push', { token: t, body: { classes: [], subjects: [], goals: [],
-    transactions: [{ id: txnId, subjectId, amount: -999, occurredAt: t1, updatedAt: t0, isDeleted: false }] } });
+  // An older edit loses — and the response hands back the server's version so
+  // the phone can replace its losing copy. A newer one (a soft delete) wins.
+  const lost = (await call('POST', '/api/sync/push', { token: t, body: { classes: [], subjects: [], goals: [],
+    transactions: [{ id: txnId, subjectId, amount: -999, occurredAt: t1, updatedAt: t0, isDeleted: false }] } })).body;
   assert.equal((await call('GET', '/api/transactions', { token: t })).body[0].amount, -210);
+  assert.deepEqual(lost.current.transactions.map((r) => [r.id, r.amount]), [[txnId, -210]]);
+  assert.deepEqual([lost.current.classes, lost.current.subjects, lost.current.goals], [[], [], []]);
   await call('POST', '/api/sync/push', { token: t, body: { classes: [], subjects: [], goals: [],
     transactions: [{ id: txnId, subjectId, amount: -210, occurredAt: t1, updatedAt: t2, isDeleted: true }] } });
   assert.equal((await call('GET', '/api/transactions', { token: t })).body.length, 0);
@@ -186,7 +189,8 @@ test('sync: push new rows, last-write-wins, ownership enforced, pull includes de
   assert.equal(pulled.subjects.length, 1);
   assert.equal(pulled.transactions[0].isDeleted, true);
   assert.ok(pulled.serverTime);
-  assert.equal((await call('GET', `/api/sync/pull?since=${t2}`, { token: t })).body.transactions.length, 0);
+  const future = new Date(Date.now() + 3600_000).toISOString();
+  assert.equal((await call('GET', `/api/sync/pull?since=${future}`, { token: t })).body.transactions.length, 0);
 
   // Bob can't overwrite Carol's class, or attach rows to it.
   await call('POST', '/api/sync/push', { token: bob.token, body: {
@@ -271,4 +275,27 @@ test('mobile sign-in rejects missing CSRF and bad tokens, handing the error back
   });
   assert.match(badToken.body, /error=invalid_token/);
   assert.doesNotMatch(badToken.body, /token=ey/);
+});
+
+test('sync: an offline edit pushed late still reaches devices that pulled in between', async () => {
+  const frank = await makeUser('Frank');
+  const t = frank.token;
+  const classId = (await call('POST', '/api/classes', { token: t, body: { name: 'Food', colorHex: '#111111', monthlyLimit: 0 } })).body;
+  const subjectId = (await call('POST', `/api/classes/${classId}/subjects`, { token: t, body: { name: 'Lunch' } })).body;
+
+  // Device B syncs now and keeps the cursor it was given.
+  const first = (await call('GET', '/api/sync/pull?since=1970-01-01T00:00:00Z', { token: t })).body;
+  assert.equal(first.classes.length, 1);
+  const cursor = new Date(first.serverTime).toISOString();
+
+  // Device A was offline for hours: its expense is stamped well before B's cursor.
+  const txnId = randomUUID();
+  const hoursAgo = new Date(Date.now() - 5 * 3600_000).toISOString();
+  await call('POST', '/api/sync/push', { token: t, body: { classes: [], subjects: [], goals: [],
+    transactions: [{ id: txnId, subjectId, amount: -300, occurredAt: hoursAgo, updatedAt: hoursAgo, isDeleted: false }] } });
+
+  // B's next pull must still include it.
+  const next = (await call('GET', `/api/sync/pull?since=${cursor}`, { token: t })).body;
+  assert.deepEqual(next.transactions.map((r) => r.id), [txnId]);
+  assert.equal(next.transactions[0].updatedAt.toISOString?.() ?? next.transactions[0].updatedAt, hoursAgo);
 });

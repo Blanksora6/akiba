@@ -36,24 +36,30 @@ const list = (v) => (Array.isArray(v) ? v : []);
 const isNewer = (incoming, existing) => incoming.updatedAt.getTime() > new Date(existing.updatedAt).getTime();
 
 export default [
-  // GET /api/sync/pull?since={ISO8601} — everything of YOURS changed since then.
-  // Use 0001-01-01T00:00:00Z for a first-time full sync.
+  // GET /api/sync/pull?since={cursor} — everything of YOURS the server has
+  // written since the cursor (the serverTime from your previous pull), soft
+  // deletes included. Use 1970-01-01T00:00:00Z for a first full sync.
+  //
+  // serverTime comes from the database clock (the same clock that stamps
+  // synced_at) and is set back a minute, so a write committing at the same
+  // moment as this read is picked up next time instead of slipping between
+  // pulls. The overlap means some rows arrive twice; applying them is idempotent.
   {
     method: 'GET', path: '/sync/pull',
     async handler({ db, userId, query }) {
       const since = parseDate(query.get('since'));
       if (!since) return badRequest('since is required.');
-      const serverTime = new Date();
+      const [{ serverTime }] = await db.query(`SELECT clock_timestamp() - interval '1 minute' AS "serverTime"`);
 
       const [classes, subjects, transactions, goals] = await Promise.all([
-        db.query(`SELECT ${CLASS_COLUMNS} FROM classes WHERE user_id = $1 AND updated_at > $2`, [userId, since]),
+        db.query(`SELECT ${CLASS_COLUMNS} FROM classes WHERE user_id = $1 AND synced_at > $2`, [userId, since]),
         db.query(
           `SELECT ${SUBJECT_COLUMNS} FROM subjects s JOIN classes c ON c.id = s.class_id
-           WHERE c.user_id = $1 AND s.updated_at > $2`,
+           WHERE c.user_id = $1 AND s.synced_at > $2`,
           [userId, since],
         ),
-        db.query(`SELECT ${TRANSACTION_COLUMNS} FROM transactions WHERE user_id = $1 AND updated_at > $2`, [userId, since]),
-        db.query(`SELECT ${GOAL_COLUMNS} FROM goals WHERE user_id = $1 AND updated_at > $2`, [userId, since]),
+        db.query(`SELECT ${TRANSACTION_COLUMNS} FROM transactions WHERE user_id = $1 AND synced_at > $2`, [userId, since]),
+        db.query(`SELECT ${GOAL_COLUMNS} FROM goals WHERE user_id = $1 AND synced_at > $2`, [userId, since]),
       ]);
 
       return ok({ classes, subjects, transactions, goals, serverTime });
@@ -91,6 +97,10 @@ export default [
       ]);
 
       const writes = [];
+      // Records that lost last-write-wins: the server already had a newer
+      // version. Their current server rows go back in the response, so the
+      // phone replaces its losing edit instead of keeping it forever.
+      const stale = { classes: [], subjects: [], transactions: [], goals: [] };
 
       for (const r of classes) {
         const existing = existingClasses.get(r.id);
@@ -111,6 +121,8 @@ export default [
                    WHERE id = $1 AND user_id = $2`,
             params: values,
           });
+        } else {
+          stale.classes.push(r.id);
         }
       }
 
@@ -131,6 +143,8 @@ export default [
             text: `UPDATE subjects SET class_id = $2, name = $3, updated_at = $4, is_deleted = $5 WHERE id = $1`,
             params: values,
           });
+        } else {
+          stale.subjects.push(r.id);
         }
       }
 
@@ -157,6 +171,8 @@ export default [
                    WHERE id = $1 AND user_id = $2`,
             params: values,
           });
+        } else {
+          stale.transactions.push(r.id);
         }
       }
 
@@ -185,11 +201,23 @@ export default [
                    WHERE id = $1 AND user_id = $2`,
             params: values,
           });
+        } else {
+          stale.goals.push(r.id);
         }
       }
 
       if (writes.length) await db.batch(writes);
-      return ok({ serverTime: new Date() });
+
+      const [rClasses, rSubjects, rTransactions, rGoals] = await Promise.all([
+        db.query(`SELECT ${CLASS_COLUMNS} FROM classes WHERE id = ANY($1::uuid[])`, [stale.classes]),
+        db.query(`SELECT ${SUBJECT_COLUMNS} FROM subjects s WHERE s.id = ANY($1::uuid[])`, [stale.subjects]),
+        db.query(`SELECT ${TRANSACTION_COLUMNS} FROM transactions WHERE id = ANY($1::uuid[])`, [stale.transactions]),
+        db.query(`SELECT ${GOAL_COLUMNS} FROM goals WHERE id = ANY($1::uuid[])`, [stale.goals]),
+      ]);
+      return ok({
+        serverTime: new Date(),
+        current: { classes: rClasses, subjects: rSubjects, transactions: rTransactions, goals: rGoals },
+      });
     },
   },
 ];

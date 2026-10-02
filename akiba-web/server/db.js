@@ -65,6 +65,19 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS subjects_class_idx ON subjects (class_id)`,
   `CREATE INDEX IF NOT EXISTS transactions_user_occurred_idx ON transactions (user_id, occurred_at DESC)`,
   `CREATE INDEX IF NOT EXISTS goals_user_idx ON goals (user_id)`,
+
+  // synced_at = when the SERVER last wrote the row, set by trigger on every
+  // insert/update (web edits, sync pushes, delete cascades alike). Sync pull
+  // filters on it rather than updated_at: updated_at is the client's edit
+  // time, and a phone that was offline pushes edits stamped hours ago — a
+  // pull filtering on updated_at would silently skip them on other devices.
+  `CREATE OR REPLACE FUNCTION akiba_touch_synced_at() RETURNS trigger LANGUAGE plpgsql AS $$
+   BEGIN NEW.synced_at := clock_timestamp(); RETURN NEW; END $$`,
+  ...['classes', 'subjects', 'transactions', 'goals'].flatMap((t) => [
+    `ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT clock_timestamp()`,
+    `CREATE OR REPLACE TRIGGER ${t}_synced_at BEFORE INSERT OR UPDATE ON ${t}
+     FOR EACH ROW EXECUTE FUNCTION akiba_touch_synced_at()`,
+  ]),
 ];
 
 async function connect() {
