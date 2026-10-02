@@ -7,13 +7,21 @@ public partial class HomePage : ContentPage
 {
     private readonly HomeViewModel _vm;
     private readonly AuthService _auth;
+    private readonly IServiceProvider _services;
 
-    public HomePage(HomeViewModel vm, AuthService auth)
+    public HomePage(HomeViewModel vm, AuthService auth, IServiceProvider services)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
         _auth = auth;
+        _services = services;
     }
+
+    private async void OnAddExpense(object? sender, EventArgs e) =>
+        await EditTransactionPage.OpenAsync(Navigation, _services, null, isExpense: true);
+
+    private async void OnAddIncome(object? sender, EventArgs e) =>
+        await EditTransactionPage.OpenAsync(Navigation, _services, null, isExpense: false);
 
     protected override async void OnAppearing()
     {

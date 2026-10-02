@@ -18,6 +18,7 @@ public class AuthService(LocalDb db)
     // plain preference so app start can check "signed in?" synchronously.
     public bool IsSignedIn => Preferences.Default.ContainsKey(UserIdKey);
     public string DisplayName => Preferences.Default.Get(NameKey, "");
+    public Guid UserId => Guid.TryParse(Preferences.Default.Get(UserIdKey, ""), out var id) ? id : Guid.Empty;
 
     public Task<string?> GetTokenAsync() => SecureStorage.Default.GetAsync(TokenKey);
 

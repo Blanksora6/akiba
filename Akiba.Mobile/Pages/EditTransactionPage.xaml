@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Akiba.Mobile.ViewModels"
+             x:Class="Akiba.Mobile.Pages.EditTransactionPage"
+             x:DataType="vm:EditTransactionViewModel"
+             Title="{Binding Title}"
+             BackgroundColor="{StaticResource Ink}">
+    <ContentPage.Resources>
+        <Style TargetType="Entry">
+            <Setter Property="TextColor" Value="{StaticResource Cream}" />
+            <Setter Property="PlaceholderColor" Value="{StaticResource Muted}" />
+            <Setter Property="BackgroundColor" Value="{StaticResource Surface}" />
+        </Style>
+        <Style TargetType="Picker">
+            <Setter Property="TextColor" Value="{StaticResource Cream}" />
+            <Setter Property="TitleColor" Value="{StaticResource Muted}" />
+            <Setter Property="BackgroundColor" Value="{StaticResource Surface}" />
+        </Style>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="12">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <Button Text="Expense" Clicked="OnExpense" BackgroundColor="{StaticResource Surface}"
+                        TextColor="{StaticResource Cream}" BorderWidth="2" BorderColor="{Binding ExpenseBorder}" CornerRadius="10" />
+                <Button Grid.Column="1" Text="Income" Clicked="OnIncome" BackgroundColor="{StaticResource Surface}"
+                        TextColor="{StaticResource Cream}" BorderWidth="2" BorderColor="{Binding IncomeBorder}" CornerRadius="10" />
+            </Grid>
+
+            <Label Text="Category" Style="{StaticResource SectionTitle}" />
+            <Picker Title="Select category…" ItemsSource="{Binding CategoryOptions}"
+                    SelectedItem="{Binding SelectedCategory}" />
+
+            <VerticalStackLayout Spacing="12" IsVisible="{Binding IsNewCategory}">
+                <Entry Placeholder="New category name (e.g. Transport)" Text="{Binding NewCategoryName}" />
+                <Entry Placeholder="Monthly budget (optional)" Keyboard="Numeric" Text="{Binding NewCategoryLimit}" />
+            </VerticalStackLayout>
+
+            <Label Text="Subject" Style="{StaticResource SectionTitle}" IsVisible="{Binding ShowSubjectPicker}" />
+            <Picker Title="Select subject…" ItemsSource="{Binding SubjectOptions}"
+                    SelectedItem="{Binding SelectedSubject}" IsVisible="{Binding ShowSubjectPicker}" />
+            <Entry Placeholder="Subject name (e.g. Bus fare)" Text="{Binding NewSubjectName}" IsVisible="{Binding IsNewSubject}" />
+
+            <Label Text="Details" Style="{StaticResource SectionTitle}" />
+            <Entry Placeholder="Amount (KES)" Keyboard="Numeric" Text="{Binding Amount}" />
+            <Entry Placeholder="Note (optional)" Text="{Binding Note}" />
+            <DatePicker Date="{Binding Date}" TextColor="{StaticResource Cream}" BackgroundColor="{StaticResource Surface}" />
+
+            <Label Text="{Binding Error}" TextColor="{StaticResource Rust}" />
+
+            <Button x:Name="SaveButton" Text="Save" Clicked="OnSave" BackgroundColor="{StaticResource Gold}"
+                    TextColor="{StaticResource Ink}" FontAttributes="Bold" CornerRadius="24" HeightRequest="48" />
+            <Button Text="Delete" Clicked="OnDelete" IsVisible="{Binding IsEditing}" BackgroundColor="Transparent"
+                    TextColor="{StaticResource Rust}" BorderColor="{StaticResource Rust}" BorderWidth="1"
+                    CornerRadius="24" HeightRequest="44" />
+            <Label Text="Saved on this phone first — it syncs whenever you're online."
+                   FontSize="11" TextColor="{StaticResource Muted}" HorizontalOptions="Center" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -6,7 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Akiba.Mobile.ViewModels;
 
-public record TransactionRowView(string Title, string Subtitle, string AmountText, Color AmountColor, Color DotColor, string DateText);
+public record TransactionRowView(Guid Id, string Title, string Subtitle, string AmountText, Color AmountColor, Color DotColor, string DateText);
 
 public partial class TransactionsViewModel : ObservableObject
 {
@@ -32,10 +32,12 @@ public partial class TransactionsViewModel : ObservableObject
     public async Task LoadAsync()
     {
         var txns = await _db.GetTransactionsAsync();
+        var pending = await _sync.PendingCountAsync();
         Items.Clear();
         foreach (var t in txns)
         {
             Items.Add(new TransactionRowView(
+                t.Id,
                 t.SubjectName,
                 string.IsNullOrWhiteSpace(t.Note) ? t.ClassName : $"{t.ClassName} · {t.Note}",
                 Format.SignedMoney(t.Amount),
@@ -44,6 +46,7 @@ public partial class TransactionsViewModel : ObservableObject
                 // The stored UTC date is the calendar day that was picked — show it as-is.
                 t.OccurredAt.ToString("d MMM yyyy", CultureInfo.InvariantCulture)));
         }
+        Status = Format.SyncStatus(_sync.LastResult, _sync.LastSyncedAt, pending);
     }
 
     [RelayCommand]
@@ -51,7 +54,7 @@ public partial class TransactionsViewModel : ObservableObject
     {
         try
         {
-            Status = Format.SyncStatus(await _sync.SyncAsync(), _sync.LastSyncedAt);
+            await _sync.SyncAsync();
             await LoadAsync();
         }
         finally

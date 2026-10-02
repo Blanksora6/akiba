@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- The phone app's real sync code, compiled here for a normal .NET runtime.
+       These files deliberately use no MAUI APIs so they can be shared. -->
+  <ItemGroup>
+    <Compile Include="..\Akiba.Mobile\Models\Rows.cs" Link="Shared\Rows.cs" />
+    <Compile Include="..\Akiba.Mobile\Services\LocalDb.cs" Link="Shared\LocalDb.cs" />
+    <Compile Include="..\Akiba.Mobile\Services\ApiClient.cs" Link="Shared\ApiClient.cs" />
+    <Compile Include="..\Akiba.Mobile\Services\SyncEngine.cs" Link="Shared\SyncEngine.cs" />
+  </ItemGroup>
+
+</Project>

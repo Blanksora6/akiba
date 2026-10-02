@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using SQLite;
 
 namespace Akiba.Mobile.Models;
@@ -70,14 +71,45 @@ public class SyncStateRow
     public string Value { get; set; } = "";
 }
 
-public class SyncPullResponse
+// One pending local change waiting to be pushed: "this entity was edited".
+// The row itself holds the latest values; this just says which rows to send.
+[Table("outbox")]
+public class OutboxRow
+{
+    [PrimaryKey, AutoIncrement] public long Id { get; set; }
+    [Indexed] public string EntityType { get; set; } = "";
+    [Indexed] public Guid EntityId { get; set; }
+}
+
+public static class EntityTypes
+{
+    public const string Class = "class";
+    public const string Subject = "subject";
+    public const string Transaction = "transaction";
+    public const string Goal = "goal";
+}
+
+// The four tables as sync sends them both ways: the body of /api/sync/push,
+// and the shape of what comes back from pull and push.
+public class SyncChanges
 {
     public List<ClassRow> Classes { get; set; } = [];
     public List<SubjectRow> Subjects { get; set; } = [];
     public List<TransactionRow> Transactions { get; set; } = [];
     public List<GoalRow> Goals { get; set; } = [];
 
+    [JsonIgnore] public int Count => Classes.Count + Subjects.Count + Transactions.Count + Goals.Count;
+}
+
+public class SyncPullResponse : SyncChanges
+{
     // Kept as the server's own string and sent back verbatim as the next
     // `since`, so no clock or formatting differences creep in.
     public string ServerTime { get; set; } = "";
+}
+
+public class SyncPushResponse
+{
+    // Server versions of pushed records that lost last-write-wins.
+    public SyncChanges Current { get; set; } = new();
 }

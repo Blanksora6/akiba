@@ -6,9 +6,13 @@
              x:DataType="vm:TransactionsViewModel"
              Title="Transactions"
              BackgroundColor="{StaticResource Ink}">
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="+ Add" Clicked="OnAdd" />
+    </ContentPage.ToolbarItems>
     <RefreshView IsRefreshing="{Binding IsRefreshing}" Command="{Binding RefreshCommand}"
                  RefreshColor="{StaticResource Gold}">
-        <CollectionView ItemsSource="{Binding Items}" Margin="16,8">
+        <CollectionView ItemsSource="{Binding Items}" Margin="16,8"
+                        SelectionMode="Single" SelectionChanged="OnSelected">
             <CollectionView.EmptyView>
                 <Label Text="No transactions yet. Pull down to sync." TextColor="{StaticResource Muted}"
                        HorizontalOptions="Center" Margin="0,40" />

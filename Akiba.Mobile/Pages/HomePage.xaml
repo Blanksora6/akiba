@@ -24,6 +24,13 @@
                     </VerticalStackLayout>
                 </Border>
 
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <Button Text="+ Expense" Clicked="OnAddExpense" BackgroundColor="{StaticResource Surface}"
+                            TextColor="{StaticResource Cream}" CornerRadius="10" />
+                    <Button Grid.Column="1" Text="+ Income" Clicked="OnAddIncome" BackgroundColor="{StaticResource Surface}"
+                            TextColor="{StaticResource Cream}" CornerRadius="10" />
+                </Grid>
+
                 <Label Text="{Binding MonthLabel}" Style="{StaticResource SectionTitle}" />
                 <Label Text="No spending recorded this month." TextColor="{StaticResource Muted}"
                        IsVisible="{Binding HasNoSpending}" />

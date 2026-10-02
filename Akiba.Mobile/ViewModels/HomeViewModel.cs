@@ -61,6 +61,7 @@ public partial class HomeViewModel : ObservableObject
                 s.Limit > 0));
         }
         HasNoSpending = Spending.Count == 0;
+        Status = Format.SyncStatus(_sync.LastResult, _sync.LastSyncedAt, await _sync.PendingCountAsync());
     }
 
     [RelayCommand]
@@ -68,7 +69,7 @@ public partial class HomeViewModel : ObservableObject
     {
         try
         {
-            Status = Format.SyncStatus(await _sync.SyncAsync(), _sync.LastSyncedAt);
+            await _sync.SyncAsync();
             await LoadAsync();
         }
         finally

@@ -2,56 +2,68 @@ namespace Akiba.Mobile.Services;
 
 public enum SyncResult { Synced, Offline, Failed, AlreadyRunning }
 
-// Pulls server changes into LocalDb. Runs on app start, pull-to-refresh, and
-// whenever the phone regains internet. (Pushing local edits — the outbox —
-// comes next; for now the phone is read-only.)
-public class SyncService(LocalDb db, ApiClient api, AuthService auth)
+// The app-facing side of sync: decides when to run SyncEngine (app start,
+// pull-to-refresh, after a local edit, whenever the phone regains internet)
+// and turns its errors into events the screens can show.
+public class SyncService(LocalDb db, SyncEngine engine, AuthService auth)
 {
-    private const string LastPulledKey = "lastPulledAt";
-    private const string FirstSync = "1970-01-01T00:00:00.000Z";
-
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _watching;
 
-    // Raised (on the main thread) after new data lands in LocalDb.
+    // Raised on the main thread whenever local data changed (a sync landed,
+    // or the user edited something).
     public event Action? DataChanged;
 
-    // Raised (on the main thread) when the server rejects our token.
+    // Raised on the main thread when the server rejects our token.
     public event Action? SessionExpired;
 
     public DateTime? LastSyncedAt { get; private set; }
+    public SyncResult? LastResult { get; private set; }
 
     public async Task<SyncResult> SyncAsync()
     {
-        if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet) return SyncResult.Offline;
+        if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet) return Done(SyncResult.Offline);
         if (!await _gate.WaitAsync(0)) return SyncResult.AlreadyRunning;
         try
         {
-            var since = await db.GetStateAsync(LastPulledKey) ?? FirstSync;
-            var pull = await api.PullAsync(since);
-            await db.ApplyPullAsync(pull);
-            await db.SetStateAsync(LastPulledKey, pull.ServerTime);
+            await engine.RunAsync();
             LastSyncedAt = DateTime.Now;
-
             MainThread.BeginInvokeOnMainThread(() => DataChanged?.Invoke());
-            return SyncResult.Synced;
+            return Done(SyncResult.Synced);
         }
         catch (SessionExpiredException)
         {
+            // Pending edits stay in the outbox and go up after signing back in.
             auth.ForgetSession();
             MainThread.BeginInvokeOnMainThread(() => SessionExpired?.Invoke());
-            return SyncResult.Failed;
+            return Done(SyncResult.Failed);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
         {
-            // Flaky connection or server hiccup — local data stays as it was.
-            return SyncResult.Failed;
+            // Flaky connection or server hiccup — local data and the outbox
+            // stay as they are; the next sync retries.
+            return Done(SyncResult.Failed);
         }
         finally
         {
             _gate.Release();
         }
     }
+
+    // After a local edit: refresh screens now, push in the background.
+    public void NotifyLocalChange()
+    {
+        DataChanged?.Invoke();
+        _ = SyncAsync();
+    }
+
+    private SyncResult Done(SyncResult result)
+    {
+        LastResult = result;
+        return result;
+    }
+
+    public Task<int> PendingCountAsync() => db.PendingCountAsync();
 
     // Sync as soon as the phone comes back online.
     public void StartWatchingConnectivity()
