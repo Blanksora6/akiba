@@ -1,6 +1,7 @@
 using Akiba.Mobile.Pages;
 using Akiba.Mobile.Services;
 using Akiba.Mobile.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Akiba.Mobile;
@@ -42,6 +43,10 @@ public static class MauiProgram
 
 #if DEBUG
 		builder.Logging.AddDebug();
+		// Fail at launch, not after sign-in, if any page or service can't be
+		// constructed (most screens are only created once signed in).
+		builder.ConfigureContainer(new DefaultServiceProviderFactory(
+			new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true }));
 #endif
 
 		return builder.Build();
